@@ -1,9 +1,8 @@
 import numpy as np
 from scipy.stats import poisson, norm
-#from aLib.mathops import root_search
 import warnings
 
-__all__ = ['mu_acc', 'FC_ints_raw', 'FC_ints', 'FC_ints_dev']
+__all__ = ['mu_acc', 'FC_ints_raw', 'FC_ints']
 
 def mu_acc(mu_range, n, b, alpha=0.1):
     """
