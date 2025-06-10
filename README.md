@@ -1,5 +1,5 @@
 # feldman_cousins
-Tool for producing confidence intervals from the Feldman-Cousins technique with a Poisson random variable and a known background.
+Tool for producing confidence intervals from the Feldman-Cousins technique with a Poisson random variable and a known background. S
 
 Tip: do a git-clone of this repository into a directory called `feldman_cousins`, and make that directory findable for a python import.  This will reproduce the values in e.g. Feldman-Cousins Table IV, where one specifies an observed number of events and a background expectation.  A confidence level can be provided as well, through the input `alpha` (`alpha=0.1` corresponds to 90% confidence intervals).
 
