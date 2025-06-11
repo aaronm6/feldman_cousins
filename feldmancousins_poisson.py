@@ -1,8 +1,9 @@
 import numpy as np
 from scipy.stats import poisson, norm
+from scipy.optimize import bisect
 import warnings
 
-__all__ = ['mu_acc', 'FC_ints_raw', 'FC_ints']
+__all__ = ['mu_acc', 'FC_ints_raw', 'FC_ints', 'FC_ints_search']
 
 def mu_acc(mu_range, n, b, alpha=0.1):
     """
@@ -88,6 +89,48 @@ def FC_ints_raw(n, b, alpha=0.1, verbosity=0):
         #warnings.warn("max mu pinned at max of mu search range", category=RuntimeWarning)
         warnings.warn(wm, category=RuntimeWarning)
     return (mu_min, mu_max)
+
+def _round_to_nearest(value, nearest):
+    return np.round(value/nearest) / nearest
+
+def FC_ints_search(n, b, alpha=0.1):
+    """
+    Like FC_ints_raw, but this tries to recursively find an approximate value for the bounds of
+    the confidence interval.
+    """
+    assert isinstance(n, int) or isinstance(n,np.int64), "Input 'n' must be an integer"
+    assert isinstance(b, float) or isinstance(b,np.float64), "Input 'b' must be a float"
+    
+    b_eff = max(b, 1e-10)
+    fine_step = 0.005
+    """
+    mu_range_coarse = np.linspace(0, 1.5*n + 2, 10)
+    mu_pass_coarse_bool = mu_acc(mu_range_coarse, n, b_eff, alpha=alpha)
+    mu_pass_coarse = mu_range_coarse[mu_pass_coarse_bool]
+    """
+    mu_best = max(0, n-b)
+    mu_root_func = lambda mu: mu_acc(np.r_[mu], n, b_eff, alpha=alpha) - .5
+    mu_upper_coarse = bisect(mu_root_func, mu_best, n+b_eff+10., xtol=1.)
+    mu_upper_coarse = _round_to_nearest(mu_upper_coarse, fine_step)
+    mu_range_upper = np.arange(mu_upper_coarse-1., mu_upper_coarse+1.,fine_step)
+    mu_upper = mu_range_upper[mu_acc(mu_range_upper, n, b_eff, alpha=alpha)].max()
+    if mu_upper == mu_range_upper.max():
+        wm = f"did not find upper bound of mu"
+        warnings.warn(wm, category=RuntimeWarning)
+    
+    mu_lower = 0.
+    if mu_best > 1e-12:
+        mu_lower_coarse = bisect(mu_root_func, 1e-12, mu_best, xtol=1.)
+        mu_lower_coarse = _round_to_nearest(mu_lower_coarse, fine_step)
+        mu_lower_lower = max(1e-12, mu_lower_coarse-1)
+        mu_lower_upper = mu_lower_coarse + 1
+        mu_range_lower = np.arange(mu_lower_lower, mu_lower_upper, fine_step)
+        mu_lower = mu_range_lower[mu_acc(mu_range_lower, n, b, alpha=alpha)].min()
+        if mu_lower == mu_range_lower:
+            wm = f"did not find lower bound of mu"
+            warnings.warn(wm, category=RuntimeWarning)
+    return mu_lower, mu_upper
+
 
 def FC_ints(n, b, alpha=0.1):
     return FC_ints_raw(n, b, alpha=alpha)
