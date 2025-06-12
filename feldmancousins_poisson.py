@@ -65,12 +65,14 @@ def FC_ints_raw(n, b, alpha=0.1, verbosity=0):
     assert isinstance(b, float) or isinstance(b,np.float64), "Input 'b' must be a float"
     m = norm.ppf(1-alpha/2)
     b_eff = max(b, 1e-10) # the method barfs if b is actually zero
-    if verbosity==1:
+    if verbosity >= 1:
         print(f'{b = }', flush=True)
     muR_min = .25*((m-np.sqrt((m**2)+4*n))**2)-b_eff-2
     muR_min = max(0., muR_min)
     muR_max = .25*((m+np.sqrt((m**2)+4*n))**2)-b_eff+10.
     muR_max = max(10., muR_max)
+    if verbosity >= 1:
+        print(f'mu_range = ({muR_min}, {muR_max})')
     if (muR_max - muR_min)/0.005 < 8000.:
         mu_range = np.arange(muR_min, muR_max, 0.005)
     else:
@@ -78,6 +80,8 @@ def FC_ints_raw(n, b, alpha=0.1, verbosity=0):
     #print(f"mu_range: {len(mu_range)} elements")
     mu_pass = mu_range[mu_acc(mu_range, n, b_eff, alpha=alpha)]
     mu_min, mu_max = mu_pass.min(), mu_pass.max()
+    if verbosity >= 1:
+        print(f'LL, UL: ({mu_min}, {mu_max})')
     if ((muR_min-mu_min)**2 <= (0.02**2)) and (muR_min != 0.):
         wm = f"min of mu pinned at min of mu search range. {muR_min = }|||| {mu_min = }\n" + \
             f"n, b = {n}, {b:0.2f}"
@@ -91,7 +95,8 @@ def FC_ints_raw(n, b, alpha=0.1, verbosity=0):
     return (mu_min, mu_max)
 
 def _round_to_nearest(value, nearest):
-    return np.round(value/nearest) / nearest
+    output = round(value/nearest) * nearest
+    return output
 
 def FC_ints_search(n, b, alpha=0.1):
     """
@@ -103,33 +108,34 @@ def FC_ints_search(n, b, alpha=0.1):
     
     b_eff = max(b, 1e-10)
     fine_step = 0.005
-    """
-    mu_range_coarse = np.linspace(0, 1.5*n + 2, 10)
-    mu_pass_coarse_bool = mu_acc(mu_range_coarse, n, b_eff, alpha=alpha)
-    mu_pass_coarse = mu_range_coarse[mu_pass_coarse_bool]
-    """
+    
     mu_best = max(0, n-b)
     mu_root_func = lambda mu: mu_acc(np.r_[mu], n, b_eff, alpha=alpha) - .5
     mu_upper_coarse = bisect(mu_root_func, mu_best, n+b_eff+10., xtol=1.)
-    mu_upper_coarse = _round_to_nearest(mu_upper_coarse, fine_step)
-    mu_range_upper = np.arange(mu_upper_coarse-1., mu_upper_coarse+1.,fine_step)
+    #mu_upper_coarse = _round_to_nearest(mu_upper_coarse, fine_step)
+    mu_range_upper = np.arange(mu_upper_coarse-1.5, mu_upper_coarse+1.5,fine_step)
     mu_upper = mu_range_upper[mu_acc(mu_range_upper, n, b_eff, alpha=alpha)].max()
     if mu_upper == mu_range_upper.max():
-        wm = f"did not find upper bound of mu"
+        wm = f"did not find upper bound of mu: (n,b) = {(n,b)}"
         warnings.warn(wm, category=RuntimeWarning)
     
     mu_lower = 0.
     if mu_best > 1e-12:
-        mu_lower_coarse = bisect(mu_root_func, 1e-12, mu_best, xtol=1.)
-        mu_lower_coarse = _round_to_nearest(mu_lower_coarse, fine_step)
-        mu_lower_lower = max(1e-12, mu_lower_coarse-1)
-        mu_lower_upper = mu_lower_coarse + 1
-        mu_range_lower = np.arange(mu_lower_lower, mu_lower_upper, fine_step)
-        mu_lower = mu_range_lower[mu_acc(mu_range_lower, n, b, alpha=alpha)].min()
-        if mu_lower == mu_range_lower:
-            wm = f"did not find lower bound of mu"
-            warnings.warn(wm, category=RuntimeWarning)
-    return mu_lower, mu_upper
+        mu_left0, mu_right0 = 1e-12, mu_best # initial left and right windows of the bisect root search
+        if mu_root_func(mu_left0) == mu_root_func(mu_right0):
+            mu_lower = mu_left0
+        else:
+            mu_lower_coarse = bisect(mu_root_func, mu_left0, mu_right0, xtol=1.)
+            #mu_lower_coarse = _round_to_nearest(mu_lower_coarse, fine_step)
+            mu_lower_lower = max(1e-12, mu_lower_coarse-1.5)
+            mu_lower_upper = mu_lower_coarse + 1.5
+            mu_range_lower = np.arange(mu_lower_lower, mu_lower_upper, fine_step)
+            cut_mu_acc = mu_acc(mu_range_lower, n, b_eff, alpha=alpha)
+            mu_lower = mu_range_lower[mu_acc(mu_range_lower, n, b_eff, alpha=alpha)].min()
+            if mu_lower == mu_lower_lower:
+                wm = f"did not find lower bound of mu:\n (n,b) = {(n,b)}, {mu_lower = }, {mu_lower_coarse = }"
+                warnings.warn(wm, category=RuntimeWarning)
+    return _round_to_nearest(mu_lower, fine_step), _round_to_nearest(mu_upper, fine_step)
 
 
 def FC_ints(n, b, alpha=0.1):
